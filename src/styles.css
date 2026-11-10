@@ -1221,6 +1221,13 @@ select:focus-visible {
   margin-top: 0.5rem;
 }
 
+.confirmation-message {
+  margin: 0;
+  color: #68796f;
+  font-size: 0.76rem;
+  line-height: 1.55;
+}
+
 .secret-callout {
   display: flex;
   align-items: flex-start;

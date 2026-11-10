@@ -155,7 +155,7 @@ export default function SchoolDetails({
           </div>
           <span className="count-chip">{installations.length}</span>
         </div>
-        {loadingInstallations ? (
+        {loadingInstallations && !installations.length ? (
           <div className="loading-line"><span /> Cargando instalaciones…</div>
         ) : installations.length ? (
           <div className="installation-list">

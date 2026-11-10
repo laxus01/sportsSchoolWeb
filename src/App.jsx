@@ -94,6 +94,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [toast, setToast] = useState(null);
   const [modal, setModal] = useState(null);
+  const [confirmation, setConfirmation] = useState(null);
   const [events, setEvents] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
 
@@ -202,7 +203,7 @@ export default function App() {
     setToast(null);
     try {
       const result = await action();
-      setToast({ tone: 'success', message: successMessage });
+      if (successMessage) setToast({ tone: 'success', message: successMessage });
       return result;
     } catch (error) {
       setToast({ tone: 'error', message: getErrorMessage(error) });
@@ -246,24 +247,29 @@ export default function App() {
 
   async function issueActivationCode(school) {
     if (busy) return;
-    if (!window.confirm(`¿Emitir un código de activación de un solo uso para ${school.name}?`)) {
-      return;
-    }
-    const result = await runMutation(
-      () =>
-        api.post(
-          `/admin/schools/${encodeURIComponent(school.id)}/activation-codes`,
-          {},
-        ),
-      'Código generado. Copíalo y entrégalo de forma segura; no podrás volver a verlo.',
-    );
-    if (result?.code) {
-      setModal({
-        type: 'activation',
-        code: result.code,
-        expiresAt: result.expiresAt,
-      });
-    }
+    setConfirmation({
+      title: 'Emitir código de activación',
+      message: `Se generará un código de un solo uso para ${school.name}. Solo podrás verlo una vez.`,
+      confirmLabel: 'Emitir código',
+      onConfirm: async () => {
+        setConfirmation(null);
+        const result = await runMutation(
+          () =>
+            api.post(
+              `/admin/schools/${encodeURIComponent(school.id)}/activation-codes`,
+              {},
+            ),
+          null,
+        );
+        if (result?.code) {
+          setModal({
+            type: 'activation',
+            code: result.code,
+            expiresAt: result.expiresAt,
+          });
+        }
+      },
+    });
   }
 
   async function changeLicenseStatus(school, action) {
@@ -275,38 +281,77 @@ export default function App() {
     };
     const selected = actions[action];
     if (!selected) return;
-    if (!window.confirm(`¿Confirmas ${selected.label} la licencia de ${school.name}?`)) {
-      return;
-    }
-    const result = await runMutation(
-      () =>
-        api.post(
-          `/admin/licenses/${encodeURIComponent(school.licenseId)}/${selected.suffix}`,
-          {},
-        ),
-      `Licencia ${action === 'reactivate' ? 'reactivada' : action === 'suspend' ? 'suspendida' : 'cancelada'}.`,
-    );
-    if (result) await loadSchools(school.id);
+    setConfirmation({
+      title: `${selected.label[0].toUpperCase()}${selected.label.slice(1)} licencia`,
+      message: `¿Confirmas ${selected.label} la licencia de ${school.name}?`,
+      confirmLabel: `${selected.label[0].toUpperCase()}${selected.label.slice(1)} licencia`,
+      danger: action === 'cancel',
+      onConfirm: async () => {
+        setConfirmation(null);
+        const result = await runMutation(
+          () =>
+            api.post(
+              `/admin/licenses/${encodeURIComponent(school.licenseId)}/${selected.suffix}`,
+              {},
+            ),
+          `Licencia ${action === 'reactivate' ? 'reactivada' : action === 'suspend' ? 'suspendida' : 'cancelada'}.`,
+        );
+        if (!result) return;
+        const licenseStatus = {
+          suspend: 'SUSPENDED',
+          reactivate: 'ACTIVE',
+          cancel: 'CANCELLED',
+        }[action];
+        setSchools((current) =>
+          current.map((item) =>
+            item.id === school.id
+              ? { ...item, licenseStatus, revision: Number(item.revision || 0) + 1 }
+              : item,
+          ),
+        );
+        await Promise.all([
+          loadSchools(school.id),
+          refreshInstallations(school.id),
+        ]);
+      },
+    });
   }
 
   async function changeInstallationStatus(school, installation, action) {
     if (busy) return;
     const labels = { suspend: 'suspender', reactivate: 'reactivar', revoke: 'revocar' };
-    if (!window.confirm(`¿Confirmas ${labels[action]} esta instalación?`)) return;
-    const result = await runMutation(
-      () =>
-        api.post(
-          `/admin/installations/${encodeURIComponent(installation.id)}/${action}`,
-          {},
-        ),
-      `Instalación ${action === 'reactivate' ? 'reactivada' : action === 'suspend' ? 'suspendida' : 'revocada'}.`,
-    );
-    if (result) {
-      await Promise.all([
-        loadSchools(school.id),
-        refreshInstallations(school.id),
-      ]);
-    }
+    const label = labels[action];
+    if (!label) return;
+    setConfirmation({
+      title: `${label[0].toUpperCase()}${label.slice(1)} instalación`,
+      message: `¿Confirmas ${label} esta instalación de ${school.name}?`,
+      confirmLabel: `${label[0].toUpperCase()}${label.slice(1)} instalación`,
+      danger: action === 'revoke',
+      onConfirm: async () => {
+        setConfirmation(null);
+        const result = await runMutation(
+          () =>
+            api.post(
+              `/admin/installations/${encodeURIComponent(installation.id)}/${action}`,
+              {},
+            ),
+          `Instalación ${action === 'reactivate' ? 'reactivada' : action === 'suspend' ? 'suspendida' : 'revocada'}.`,
+        );
+        if (result) {
+          const status = {
+            suspend: 'SUSPENDED',
+            reactivate: 'ACTIVE',
+            revoke: 'REVOKED',
+          }[action];
+          setInstallations((current) =>
+            current.map((item) =>
+              item.id === installation.id ? { ...item, status } : item,
+            ),
+          );
+          await refreshInstallations(school.id);
+        }
+      },
+    });
   }
 
   async function openEvents(school) {
@@ -430,7 +475,7 @@ export default function App() {
                 <span>ESTADO</span>
                 <span />
               </div>
-              {loadingSchools ? (
+              {loadingSchools && !schools.length ? (
                 <div className="board-loading"><LoadingMark /> Cargando directorio…</div>
               ) : filteredSchools.length ? (
                 <SchoolTable
@@ -444,8 +489,12 @@ export default function App() {
               )}
               <div className="board-footer">
                 <span>Mostrando {filteredSchools.length} de {schools.length}</span>
-                <button className="text-button" onClick={() => loadSchools(selectedSchoolId)}>
-                  Actualizar lista ↻
+                <button
+                  className="text-button"
+                  disabled={loadingSchools}
+                  onClick={() => loadSchools(selectedSchoolId)}
+                >
+                  {loadingSchools ? 'Actualizando…' : 'Actualizar lista ↻'}
                 </button>
               </div>
             </div>
@@ -475,6 +524,32 @@ export default function App() {
           <span>{toast.tone === 'success' ? '✓' : '!'}</span>{toast.message}
           <button onClick={() => setToast(null)} aria-label="Cerrar aviso">×</button>
         </div>
+      )}
+
+      {confirmation && (
+        <Modal
+          title={confirmation.title}
+          eyebrow="CONFIRMAR ACCIÓN"
+          onClose={() => setConfirmation(null)}
+        >
+          <p className="confirmation-message">{confirmation.message}</p>
+          <div className="modal-actions">
+            <button
+              className="button button-quiet"
+              disabled={busy}
+              onClick={() => setConfirmation(null)}
+            >
+              Volver
+            </button>
+            <button
+              className={`button ${confirmation.danger ? 'button-danger-quiet' : 'button-dark'}`}
+              disabled={busy}
+              onClick={confirmation.onConfirm}
+            >
+              {busy ? 'Procesando…' : confirmation.confirmLabel}
+            </button>
+          </div>
+        </Modal>
       )}
 
       {modal?.type === 'school' && (
