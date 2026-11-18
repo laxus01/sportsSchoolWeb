@@ -912,6 +912,21 @@ select:focus-visible {
   font-size: 1.05rem;
 }
 
+.installation-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.installation-history-toggle {
+  border: 0;
+  padding: 0.25rem;
+  background: transparent;
+  color: #456a57;
+  font-size: 0.58rem;
+  font-weight: 750;
+}
+
 .count-chip {
   display: grid;
   min-width: 1.5rem;
@@ -926,7 +941,23 @@ select:focus-visible {
 
 .installation-list {
   display: grid;
+  max-height: min(42vh, 18rem);
+  overflow-y: auto;
   gap: 0.5rem;
+  overscroll-behavior: contain;
+  padding-right: 0.2rem;
+  scrollbar-color: #c5d3c6 transparent;
+  scrollbar-width: thin;
+}
+
+.installation-list[hidden] {
+  display: none;
+}
+
+.installation-list:focus-visible {
+  border-radius: 0.45rem;
+  outline: 2px solid rgb(82 156 121 / 45%);
+  outline-offset: 2px;
 }
 
 .installation-row {

@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { formatDate, licenseTypeLabel, statusLabel, statusTone } from '../format.js';
 
 function Status({ value }) {
@@ -55,6 +57,8 @@ export default function SchoolDetails({
   onInstallationStatus,
   onEvents,
 }) {
+  const [collapsedHistorySchoolId, setCollapsedHistorySchoolId] = useState(null);
+
   if (!school) {
     return (
       <aside className="detail-empty">
@@ -69,6 +73,7 @@ export default function SchoolDetails({
   const canManage = role === 'OWNER' || role === 'ADMIN';
   const isActive = school.licenseStatus === 'ACTIVE' && school.status === 'ACTIVE';
   const canRecordPayment = school.licenseStatus !== 'CANCELLED';
+  const isInstallationHistoryExpanded = collapsedHistorySchoolId !== school.id;
 
   return (
     <aside className="school-detail">
@@ -151,14 +156,39 @@ export default function SchoolDetails({
         <div className="section-heading">
           <div>
             <p className="eyebrow">DISPOSITIVOS</p>
-            <h3>Instalaciones</h3>
+            <h3 id="installation-history-heading">Instalaciones</h3>
           </div>
-          <span className="count-chip">{installations.length}</span>
+          <div className="installation-heading-actions">
+            {installations.length > 0 && (
+              <button
+                className="installation-history-toggle"
+                type="button"
+                aria-expanded={isInstallationHistoryExpanded}
+                aria-controls="installation-history"
+                onClick={() =>
+                  setCollapsedHistorySchoolId(
+                    isInstallationHistoryExpanded ? school.id : null,
+                  )
+                }
+              >
+                {isInstallationHistoryExpanded ? 'Ocultar historial' : 'Mostrar historial'}
+              </button>
+            )}
+            <span className="count-chip">{installations.length}</span>
+          </div>
         </div>
         {loadingInstallations && !installations.length ? (
           <div className="loading-line"><span /> Cargando instalaciones…</div>
         ) : installations.length ? (
-          <div className="installation-list">
+          <div
+            className="installation-list"
+            id="installation-history"
+            role="region"
+            aria-labelledby="installation-history-heading"
+            aria-label="Historial de instalaciones"
+            tabIndex={0}
+            hidden={!isInstallationHistoryExpanded}
+          >
             {installations.map((item) => (
               <InstallationRow
                 key={item.id}
